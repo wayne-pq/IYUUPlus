@@ -13,11 +13,15 @@
  */
 namespace Workerman\Protocols\Http\Session;
 
+use Workerman\Protocols\Http\Session;
+use Workerman\Timer;
+use RedisException;
+
 /**
  * Class RedisSessionHandler
  * @package Workerman\Protocols\Http\Session
  */
-class RedisSessionHandler extends \SessionHandler
+class RedisSessionHandler implements SessionHandlerInterface
 {
 
     /**
@@ -26,19 +30,20 @@ class RedisSessionHandler extends \SessionHandler
     protected $_redis;
 
     /**
-     * @var int
+     * @var array
      */
-    protected $_maxLifeTime;
+    protected $_config;
 
     /**
      * RedisSessionHandler constructor.
-     * @param $config = [
+     * @param array $config = [
      *  'host'     => '127.0.0.1',
      *  'port'     => 6379,
      *  'timeout'  => 2,
      *  'auth'     => '******',
      *  'database' => 2,
      *  'prefix'   => 'redis_session_',
+     *  'ping'     => 55,
      * ]
      */
     public function __construct($config)
@@ -46,11 +51,23 @@ class RedisSessionHandler extends \SessionHandler
         if (false === extension_loaded('redis')) {
             throw new \RuntimeException('Please install redis extension.');
         }
-        $this->_maxLifeTime = (int)ini_get('session.gc_maxlifetime');
 
         if (!isset($config['timeout'])) {
             $config['timeout'] = 2;
         }
+
+        $this->_config = $config;
+
+        $this->connect();
+
+        Timer::add(!empty($config['ping']) ? $config['ping'] : 55, function () {
+            $this->_redis->get('ping');
+        });
+    }
+
+    public function connect()
+    {
+        $config = $this->_config;
 
         $this->_redis = new \Redis();
         if (false === $this->_redis->connect($config['host'], $config['port'], $config['timeout'])) {
@@ -81,7 +98,17 @@ class RedisSessionHandler extends \SessionHandler
      */
     public function read($session_id)
     {
-        return $this->_redis->get($session_id);
+        try {
+            return $this->_redis->get($session_id);
+        } catch (RedisException $e) {
+            $msg = strtolower($e->getMessage());
+            if ($msg === 'connection lost' || strpos($msg, 'went away')) {
+                $this->connect();
+                return $this->_redis->get($session_id);
+            }
+            throw $e;
+        }
+
     }
 
     /**
@@ -89,7 +116,15 @@ class RedisSessionHandler extends \SessionHandler
      */
     public function write($session_id, $session_data)
     {
-        return true === $this->_redis->setex($session_id, $this->_maxLifeTime, $session_data);
+        return true === $this->_redis->setex($session_id, Session::$lifetime, $session_data);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function updateTimestamp($id, $data = "")
+    {
+        return true === $this->_redis->expire($id, Session::$lifetime);
     }
 
     /**

@@ -46,6 +46,11 @@ class Request
     public $properties = array();
 
     /**
+     * @var int 
+     */
+    public static $maxFileUploads = 1024;
+
+    /**
      * Http buffer.
      *
      * @var string
@@ -60,27 +65,6 @@ class Request
     protected $_data = null;
 
     /**
-     * Header cache.
-     *
-     * @var array
-     */
-    protected static $_headerCache = array();
-
-    /**
-     * Get cache.
-     *
-     * @var array
-     */
-    protected static $_getCache = array();
-
-    /**
-     * Post cache.
-     *
-     * @var array
-     */
-    protected static $_postCache = array();
-
-    /**
      * Enable cache.
      *
      * @var bool
@@ -91,7 +75,7 @@ class Request
     /**
      * Request constructor.
      *
-     * @param $buffer
+     * @param string $buffer
      */
     public function __construct($buffer)
     {
@@ -101,8 +85,8 @@ class Request
     /**
      * $_GET.
      *
-     * @param null $name
-     * @param null $default
+     * @param string|null $name
+     * @param mixed|null $default
      * @return mixed|null
      */
     public function get($name = null, $default = null)
@@ -119,8 +103,8 @@ class Request
     /**
      * $_POST.
      *
-     * @param $name
-     * @param null $default
+     * @param string|null $name
+     * @param mixed|null $default
      * @return mixed|null
      */
     public function post($name = null, $default = null)
@@ -137,9 +121,9 @@ class Request
     /**
      * Get header item by name.
      *
-     * @param null $name
-     * @param null $default
-     * @return string|null
+     * @param string|null $name
+     * @param mixed|null $default
+     * @return array|string|null
      */
     public function header($name = null, $default = null)
     {
@@ -156,14 +140,15 @@ class Request
     /**
      * Get cookie item by name.
      *
-     * @param null $name
-     * @param null $default
-     * @return string|null
+     * @param string|null $name
+     * @param mixed|null $default
+     * @return array|string|null
      */
     public function cookie($name = null, $default = null)
     {
         if (!isset($this->_data['cookie'])) {
-            \parse_str(\str_replace('; ', '&', $this->header('cookie')), $this->_data['cookie']);
+            $this->_data['cookie'] = array();
+            \parse_str(\preg_replace('/; ?/', '&', $this->header('cookie', '')), $this->_data['cookie']);
         }
         if ($name === null) {
             return $this->_data['cookie'];
@@ -174,7 +159,7 @@ class Request
     /**
      * Get upload files.
      *
-     * @param null $name
+     * @param string|null $name
      * @return array|null
      */
     public function file($name = null)
@@ -204,7 +189,7 @@ class Request
     /**
      * Get http protocol version.
      *
-     * @return string.
+     * @return string
      */
     public function protocolVersion()
     {
@@ -223,7 +208,7 @@ class Request
     public function host($without_port = false)
     {
         $host = $this->header('host');
-        if ($without_port && $pos = \strpos($host, ':')) {
+        if ($host && $without_port && $pos = \strpos($host, ':')) {
             return \substr($host, 0, $pos);
         }
         return $host;
@@ -250,7 +235,7 @@ class Request
     public function path()
     {
         if (!isset($this->_data['path'])) {
-            $this->_data['path'] = \parse_url($this->uri(), PHP_URL_PATH);
+            $this->_data['path'] = (string)\parse_url($this->uri(), PHP_URL_PATH);
         }
         return $this->_data['path'];
     }
@@ -263,7 +248,7 @@ class Request
     public function queryString()
     {
         if (!isset($this->_data['query_string'])) {
-            $this->_data['query_string'] = \parse_url($this->uri(), PHP_URL_QUERY);
+            $this->_data['query_string'] = (string)\parse_url($this->uri(), PHP_URL_QUERY);
         }
         return $this->_data['query_string'];
     }
@@ -286,33 +271,37 @@ class Request
     }
 
     /**
-     * Get session id.
+     * Get/Set session id.
      *
-     * @return bool|mixed
+     * @param $session_id
+     * @return string
      */
-    public function sessionId()
+    public function sessionId($session_id = null)
     {
-        if (!isset($this->_data['sid'])) {
-            $session_name = Http::sessionName();
-            $sid = $this->cookie($session_name);
+        if ($session_id) {
+            unset($this->sid);
+        }
+        if (!isset($this->sid)) {
+            $session_name = Session::$name;
+            $sid = $session_id ? '' : $this->cookie($session_name);
             if ($sid === '' || $sid === null) {
                 if ($this->connection === null) {
                     Worker::safeEcho('Request->session() fail, header already send');
                     return false;
                 }
-                $sid = static::createSessionId();
-                $cookie_params = \session_get_cookie_params();
+                $sid = $session_id ? $session_id : static::createSessionId();
+                $cookie_params = Session::getCookieParams();
                 $this->connection->__header['Set-Cookie'] = array($session_name . '=' . $sid
                     . (empty($cookie_params['domain']) ? '' : '; Domain=' . $cookie_params['domain'])
-                    . (empty($cookie_params['lifetime']) ? '' : '; Max-Age=' . ($cookie_params['lifetime'] + \time()))
+                    . (empty($cookie_params['lifetime']) ? '' : '; Max-Age=' . $cookie_params['lifetime'])
                     . (empty($cookie_params['path']) ? '' : '; Path=' . $cookie_params['path'])
                     . (empty($cookie_params['samesite']) ? '' : '; SameSite=' . $cookie_params['samesite'])
                     . (!$cookie_params['secure'] ? '' : '; Secure')
                     . (!$cookie_params['httponly'] ? '' : '; HttpOnly'));
             }
-            $this->_data['sid'] = $sid;
+            $this->sid = $sid;
         }
-        return $this->_data['sid'];
+        return $this->sid;
     }
 
     /**
@@ -351,7 +340,7 @@ class Request
     /**
      * Enable or disable cache.
      *
-     * @param $value
+     * @param mixed $value
      */
     public static function enableCache($value)
     {
@@ -390,27 +379,39 @@ class Request
      */
     protected function parseHeaders()
     {
+        static $cache = [];
         $this->_data['headers'] = array();
         $raw_head = $this->rawHead();
-        $head_buffer = \substr($raw_head, \strpos($raw_head, "\r\n") + 2);
+        $end_line_position = \strpos($raw_head, "\r\n");
+        if ($end_line_position === false) {
+            return;
+        }
+        $head_buffer = \substr($raw_head, $end_line_position + 2);
         $cacheable = static::$_enableCache && !isset($head_buffer[2048]);
-        if ($cacheable && isset(static::$_headerCache[$head_buffer])) {
-            $this->_data['headers'] = static::$_headerCache[$head_buffer];
+        if ($cacheable && isset($cache[$head_buffer])) {
+            $this->_data['headers'] = $cache[$head_buffer];
             return;
         }
         $head_data = \explode("\r\n", $head_buffer);
         foreach ($head_data as $content) {
             if (false !== \strpos($content, ':')) {
                 list($key, $value) = \explode(':', $content, 2);
-                $this->_data['headers'][\strtolower($key)] = \ltrim($value);
+                $key = \strtolower($key);
+                $value = \ltrim($value);
             } else {
-                $this->_data['headers'][\strtolower($content)] = '';
+                $key = \strtolower($content);
+                $value = '';
+            }
+            if (isset($this->_data['headers'][$key])) {
+                $this->_data['headers'][$key] = "{$this->_data['headers'][$key]},$value";
+            } else {
+                $this->_data['headers'][$key] = $value;
             }
         }
         if ($cacheable) {
-            static::$_headerCache[$head_buffer] = $this->_data['headers'];
-            if (\count(static::$_headerCache) > 128) {
-                unset(static::$_headerCache[key(static::$_headerCache)]);
+            $cache[$head_buffer] = $this->_data['headers'];
+            if (\count($cache) > 128) {
+                unset($cache[key($cache)]);
             }
         }
     }
@@ -422,21 +423,22 @@ class Request
      */
     protected function parseGet()
     {
+        static $cache = [];
         $query_string = $this->queryString();
         $this->_data['get'] = array();
         if ($query_string === '') {
             return;
         }
         $cacheable = static::$_enableCache && !isset($query_string[1024]);
-        if ($cacheable && isset(static::$_getCache[$query_string])) {
-            $this->_data['get'] = static::$_getCache[$query_string];
+        if ($cacheable && isset($cache[$query_string])) {
+            $this->_data['get'] = $cache[$query_string];
             return;
         }
         \parse_str($query_string, $this->_data['get']);
         if ($cacheable) {
-            static::$_getCache[$query_string] = $this->_data['get'];
-            if (\count(static::$_getCache) > 256) {
-                unset(static::$_getCache[key(static::$_getCache)]);
+            $cache[$query_string] = $this->_data['get'];
+            if (\count($cache) > 256) {
+                unset($cache[key($cache)]);
             }
         }
     }
@@ -448,20 +450,21 @@ class Request
      */
     protected function parsePost()
     {
-        $body_buffer = $this->rawBody();
+        static $cache = [];
         $this->_data['post'] = $this->_data['files'] = array();
-        if ($body_buffer === '') {
-            return;
-        }
-        $cacheable = static::$_enableCache && !isset($body_buffer[1024]);
-        if ($cacheable && isset(static::$_postCache[$body_buffer])) {
-            $this->_data['post'] = static::$_postCache[$body_buffer];
-            return;
-        }
         $content_type = $this->header('content-type', '');
         if (\preg_match('/boundary="?(\S+)"?/', $content_type, $match)) {
             $http_post_boundary = '--' . $match[1];
             $this->parseUploadFiles($http_post_boundary);
+            return;
+        }
+        $body_buffer = $this->rawBody();
+        if ($body_buffer === '') {
+            return;
+        }
+        $cacheable = static::$_enableCache && !isset($body_buffer[1024]);
+        if ($cacheable && isset($cache[$body_buffer])) {
+            $this->_data['post'] = $cache[$body_buffer];
             return;
         }
         if (\preg_match('/\bjson\b/i', $content_type)) {
@@ -470,9 +473,9 @@ class Request
             \parse_str($body_buffer, $this->_data['post']);
         }
         if ($cacheable) {
-            static::$_postCache[$body_buffer] = $this->_data['post'];
-            if (\count(static::$_postCache) > 256) {
-                unset(static::$_postCache[key(static::$_postCache)]);
+            $cache[$body_buffer] = $this->_data['post'];
+            if (\count($cache) > 256) {
+                unset($cache[key($cache)]);
             }
         }
     }
@@ -480,73 +483,113 @@ class Request
     /**
      * Parse upload files.
      *
-     * @param $http_post_boundary
+     * @param string $http_post_boundary
      * @return void
      */
     protected function parseUploadFiles($http_post_boundary)
     {
-        $http_body = $this->rawBody();
-        $http_body = \substr($http_body, 0, \strlen($http_body) - (\strlen($http_post_boundary) + 4));
-        $boundary_data_array = \explode($http_post_boundary . "\r\n", $http_body);
-        if ($boundary_data_array[0] === '') {
-            unset($boundary_data_array[0]);
+        $http_post_boundary = \trim($http_post_boundary, '"');
+        $buffer = $this->_buffer;
+        $post_encode_string = '';
+        $files_encode_string = '';
+        $files = [];
+        $boday_position = strpos($buffer, "\r\n\r\n") + 4;
+        $offset = $boday_position + strlen($http_post_boundary) + 2;
+        $max_count = static::$maxFileUploads;
+        while ($max_count-- > 0 && $offset) {
+            $offset = $this->parseUploadFile($http_post_boundary, $offset, $post_encode_string, $files_encode_string, $files);
         }
-        $key = -1;
-        $files = array();
-        foreach ($boundary_data_array as $boundary_data_buffer) {
-            list($boundary_header_buffer, $boundary_value) = \explode("\r\n\r\n", $boundary_data_buffer, 2);
-            // Remove \r\n from the end of buffer.
-            $boundary_value = \substr($boundary_value, 0, -2);
-            $key++;
-            foreach (\explode("\r\n", $boundary_header_buffer) as $item) {
-                list($header_key, $header_value) = \explode(": ", $item);
-                $header_key = \strtolower($header_key);
-                switch ($header_key) {
-                    case "content-disposition":
-                        // Is file data.
-                        if (\preg_match('/name="(.*?)"; filename="(.*?)"$/i', $header_value, $match)) {
-                            $error = 0;
-                            $tmp_file = '';
-                            $size = \strlen($boundary_value);
-                            $tmp_upload_dir = HTTP::uploadTmpDir();
-                            if (!$tmp_upload_dir) {
-                                $error = UPLOAD_ERR_NO_TMP_DIR;
-                            } else {
-                                $tmp_file = \tempnam($tmp_upload_dir, 'workerman.upload.');
-                                if ($tmp_file === false || false == \file_put_contents($tmp_file, $boundary_value)) {
-                                    $error = UPLOAD_ERR_CANT_WRITE;
-                                }
-                            }
-                            // Parse upload files.
-                            $files[$key] = array(
-                                'key' => $match[1],
-                                'name' => $match[2],
-                                'tmp_name' => $tmp_file,
-                                'size' => $size,
-                                'error' => $error
-                            );
-                            break;
-                        } // Is post field.
-                        else {
-                            // Parse $_POST.
-                            if (\preg_match('/name="(.*?)"$/', $header_value, $match)) {
-                                $this->_data['post'][$match[1]] = $boundary_value;
-                            }
-                        }
-                        break;
-                    case "content-type":
-                        // add file_type
-                        $files[$key]['type'] = \trim($header_value);
-                        break;
-                }
-            }
+        if ($post_encode_string) {
+            parse_str($post_encode_string, $this->_data['post']);
         }
 
-        foreach ($files as $file) {
-            $key = $file['key'];
-            unset($file['key']);
-            $this->_data['files'][$key] = $file;
+        if ($files_encode_string) {
+            parse_str($files_encode_string, $this->_data['files']);
+            \array_walk_recursive($this->_data['files'], function (&$value) use ($files) {
+                $value = $files[$value];
+            });
         }
+    }
+
+    /**
+     * @param $boundary
+     * @param $section_start_offset
+     * @return int
+     */
+    protected function parseUploadFile($boundary, $section_start_offset, &$post_encode_string, &$files_encode_str, &$files)
+    {
+        $file = [];
+        $boundary = "\r\n$boundary";
+        if (\strlen($this->_buffer) < $section_start_offset) {
+            return 0;
+        }
+        $section_end_offset = \strpos($this->_buffer, $boundary, $section_start_offset);
+        if (!$section_end_offset) {
+            return 0;
+        }
+        $content_lines_end_offset = \strpos($this->_buffer, "\r\n\r\n", $section_start_offset);
+        if (!$content_lines_end_offset || $content_lines_end_offset + 4 > $section_end_offset) {
+            return 0;
+        }
+        $content_lines_str = \substr($this->_buffer, $section_start_offset, $content_lines_end_offset - $section_start_offset);
+        $content_lines = \explode("\r\n", trim($content_lines_str . "\r\n"));
+        $boundary_value = \substr($this->_buffer, $content_lines_end_offset + 4, $section_end_offset - $content_lines_end_offset - 4);
+        $upload_key = false;
+        foreach ($content_lines as $content_line) {
+            if (!\strpos($content_line, ': ')) {
+                return 0;
+            }
+            list($key, $value) = \explode(': ', $content_line);
+            switch (strtolower($key)) {
+                case "content-disposition":
+                    // Is file data.
+                    if (\preg_match('/name="(.*?)"; filename="(.*?)"/i', $value, $match)) {
+                        $error = 0;
+                        $tmp_file = '';
+                        $size = \strlen($boundary_value);
+                        $tmp_upload_dir = HTTP::uploadTmpDir();
+                        if (!$tmp_upload_dir) {
+                            $error = UPLOAD_ERR_NO_TMP_DIR;
+                        } else if ($boundary_value === '') {
+                            $error = UPLOAD_ERR_NO_FILE;
+                        } else {
+                            $tmp_file = \tempnam($tmp_upload_dir, 'workerman.upload.');
+                            if ($tmp_file === false || false == \file_put_contents($tmp_file, $boundary_value)) {
+                                $error = UPLOAD_ERR_CANT_WRITE;
+                            }
+                        }
+                        $upload_key = $match[1];
+                        // Parse upload files.
+                        $file = [
+                            'name' => $match[2],
+                            'tmp_name' => $tmp_file,
+                            'size' => $size,
+                            'error' => $error,
+                            'type' => null,
+                        ];
+                        break;
+                    } // Is post field.
+                    else {
+                        // Parse $_POST.
+                        if (\preg_match('/name="(.*?)"$/', $value, $match)) {
+                            $k = $match[1];
+                            $post_encode_string .= \urlencode($k) . "=" . \urlencode($boundary_value) . '&';
+                        }
+                        return $section_end_offset + \strlen($boundary) + 2;
+                    }
+                    break;
+                case "content-type":
+                    $file['type'] = \trim($value);
+                    break;
+            }
+        }
+        if ($upload_key === false) {
+            return 0;
+        }
+        $files_encode_str .= \urlencode($upload_key) . '=' . \count($files) . '&';
+        $files[] = $file;
+
+        return $section_end_offset + \strlen($boundary) + 2;
     }
 
     /**
@@ -556,14 +599,14 @@ class Request
      */
     protected static function createSessionId()
     {
-        return \bin2hex(\pack('d', \microtime(true)) . \pack('N', \mt_rand()));
+        return \bin2hex(\pack('d', \microtime(true)) . random_bytes(8));
     }
 
     /**
      * Setter.
      *
-     * @param $name
-     * @param $value
+     * @param string $name
+     * @param mixed $value
      * @return void
      */
     public function __set($name, $value)
@@ -574,7 +617,7 @@ class Request
     /**
      * Getter.
      *
-     * @param $name
+     * @param string $name
      * @return mixed|null
      */
     public function __get($name)
@@ -585,7 +628,7 @@ class Request
     /**
      * Isset.
      *
-     * @param $name
+     * @param string $name
      * @return bool
      */
     public function __isset($name)
@@ -596,12 +639,20 @@ class Request
     /**
      * Unset.
      *
-     * @param $name
+     * @param string $name
      * @return void
      */
     public function __unset($name)
     {
         unset($this->properties[$name]);
+    }
+
+    /**
+     * __toString.
+     */
+    public function __toString()
+    {
+        return $this->_buffer;
     }
 
     /**
@@ -613,11 +664,13 @@ class Request
     {
         if (isset($this->_data['files'])) {
             \clearstatcache();
-            foreach ($this->_data['files'] as $item) {
-                if (\is_file($item['tmp_name'])) {
-                    \unlink($item['tmp_name']);
+            \array_walk_recursive($this->_data['files'], function($value, $key){
+                if ($key === 'tmp_name') {
+                    if (\is_file($value)) {
+                        \unlink($value);
+                    }
                 }
-            }
+            });
         }
     }
 }

@@ -1,4 +1,5 @@
 <?php
+
 namespace app\controller;
 
 use support\Request;
@@ -7,6 +8,7 @@ use app\domain\Crontab;
 use app\domain\ConfigParser\Move as domainMove;
 use app\domain\ConfigParser\Reseed as domainReseed;
 use app\domain\ConfigParser\Rss as domainRss;
+use Throwable;
 
 /**
  * Class Task
@@ -92,8 +94,13 @@ class Task extends BaseController
     {
         $rs = self::RS;
         $uuid = $request->get('uuid');
-        //TODO...
-        return json(domainReseed::parser($uuid));
+        $pid_file = Crontab::getPidFile($uuid);
+        clearstatcache();
+        $rs['data'] = [
+            'success' => (is_file($pid_file) and unlink($pid_file)) or !is_file($pid_file),
+        ];
+
+        return json($rs);
     }
 
     /**
@@ -105,9 +112,16 @@ class Task extends BaseController
     {
         $rs = self::RS;
         $uuid = $request->get('uuid');
+        $last_line_number = $request->get('last_line_number', 50);
+        try {
+            $logs = Crontab::readLogs($uuid, $last_line_number);
+        } catch (Throwable $throwable) {
+            $logs = $throwable->getMessage();
+        }
+
         $rs['data'] = [
             'uuid' => $uuid,
-            'logs' => Crontab::readLogs($uuid)
+            'logs' => $logs,
         ];
         return json($rs);
     }

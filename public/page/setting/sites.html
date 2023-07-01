@@ -56,7 +56,7 @@
     <label class="layui-form-label {{ d.mirror.required ? 'required' : '' }}">镜像域名</label>
     <div class="layui-input-block">
       <input type="text" name="{{d.mirror.name}}" {{ d.mirror.verify ? 'lay-verify="'+d.mirror.verify+'"' : '' }} lay-reqtext="{{d.mirror.name}}不能为空" placeholder="请输入{{d.mirror.name}}" class="layui-input">
-      <tip>代理域名或者镜像域名(仅域名部分，例如：pt.baidu.com)。</tip>
+      <tip>代理域名或者镜像域名(仅域名部分，例如：pt.baidu.com)，如果不理解请勿设置。</tip>
     </div>
   </div>
   {{# if (d.cookie.visible === true) { }}
@@ -93,6 +93,24 @@
     </div>
   </div>
   {{# } }}
+  {{# if (d.rss_key.visible === true) { }}
+  <div class="layui-form-item">
+    <label class="layui-form-label {{ d.passkey.required ? 'required' : '' }}">{{d.rss_key.name}}</label>
+    <div class="layui-input-block">
+      <input type="text" name="{{d.rss_key.name}}" {{ d.rss_key.verify ? 'lay-verify="'+d.rss_key.verify+'"' : '' }} lay-reqtext="{{d.rss_key.name}}不能为空" placeholder="请输入{{d.rss_key.name}}" class="layui-input">
+      <tip>{{d.rss_key.desc}}</tip>
+    </div>
+  </div>
+  {{# } }}
+  {{# if (d.torrent_key.visible === true) { }}
+  <div class="layui-form-item">
+    <label class="layui-form-label {{ d.torrent_key.required ? 'required' : '' }}">{{d.torrent_key.name}}</label>
+    <div class="layui-input-block">
+      <input type="text" name="{{d.torrent_key.name}}" {{ d.torrent_key.verify ? 'lay-verify="'+d.torrent_key.verify+'"' : '' }} lay-reqtext="{{d.torrent_key.name}}不能为空" placeholder="请输入{{d.torrent_key.name}}" class="layui-input">
+      <tip>{{d.torrent_key.desc}}</tip>
+    </div>
+  </div>
+  {{# } }}
   {{# if (d.authkey.visible === true) { }}
   <div class="layui-form-item">
     <label class="layui-form-label {{ d.authkey.required ? 'required' : '' }}">{{d.authkey.name}}</label>
@@ -120,19 +138,19 @@
   {{# } }}
   {{# if (d.limitRule === true) { }}
   <div class="layui-form-item">
-    <div class="layui-inline">
-      <label class="layui-form-label required">流控规则</label>
-      <div class="layui-input-inline">
-        <input type="number" name="limitRule[count]" lay-verify="required" placeholder="单次辅种数" autocomplete="off" class="layui-input" value="10">
+    <label class="layui-form-label required">流控规则</label>
+    <div class="layui-input-block">
+      <div class="layui-inline">
+        <div class="layui-input-inline" style="width: 100px;">
+          <input type="number" name="limitRule[count]" lay-verify="required" placeholder="单次辅种数" autocomplete="off" class="layui-input" value="10">
+        </div>
+        <div class="layui-input-inline" style="width: 100px;">
+          <input type="number" name="limitRule[sleep]" lay-verify="required" placeholder="间隔时间" autocomplete="off" class="layui-input" value="20">
+        </div>
       </div>
+      <tip>每运行一次最多添加{单次辅种数}个种子，每添加一个种子需等待{间隔时间}秒。为账号安全，每次运行辅种的时候，超过流控限制，会在下次运行辅种的时候，继续添加辅种。</tip>
     </div>
-    <div class="layui-inline">
-      <div class="layui-input-inline">
-        <input type="number" name="limitRule[sleep]" lay-verify="required" placeholder="间隔时间" autocomplete="off" class="layui-input" value="20">
-      </div>
-      <div class="layui-form-mid layui-word-aux">每运行一次最多添加{单次辅种数}个种子，每添加一个种子需等待{间隔时间}秒。为账号安全，每次运行辅种的时候，超过流控限制，会在下次运行辅种的时候，继续添加辅种。</div>
-    </div>
-    
+
   </div>
   {{# } }}
   {{# if (d.urlJoin.visible === true) { }}
@@ -183,8 +201,10 @@
           ,rsskey: {name: 'rsskey', visible: false, required: true, desc: '', verify: 'required', reqtext: ''}
           ,torrent_pass: {name: 'torrent_pass', visible: false, required: true, desc: '', verify: 'required', reqtext: ''}
           ,authkey: {name: 'authkey', visible: false, required: true, desc: '', verify: 'required', reqtext: ''}
+          ,rss_key: {name: 'rss_key', visible: false, required: true, desc: '', verify: 'required', reqtext: ''}
+          ,torrent_key: {name: 'torrent_key', visible: false, required: true, desc: '', verify: 'required', reqtext: ''}
           ,id: false
-          ,limitRule: false
+          ,limitRule: true
           ,urlJoin: {visible: false, required: false, id: 'url_join', field: {https: true, ipv4: true, ipv6: true}}
           ,urlReplace: {visible: false, required: false, id: 'url_replace', field: {}}
           ,downHash: {name: 'downHash', visible: false, required: true, desc: '', verify: '', reqtext: ''}
@@ -200,7 +220,6 @@
         //合作站点
         case 'ourbits':
           rule.id = true;
-          rule.limitRule = true;
           rule.urlJoin.visible = true;
           break;
         case 'hdhome':
@@ -208,7 +227,6 @@
         case 'hddolby':
         case 'audiences':
           rule.id = true;
-          rule.limitRule = true;
           rule.downHash.visible = true;
           rule.downHash.desc = 'RSS订阅页面 passkey= 后面的字符串。';
           break;
@@ -224,12 +242,13 @@
         case 'm-team':
           rule.urlJoin.visible = true;
           break;
-        case 'ssd':
-        case 'pt':
-          rule.limitRule = true;
+        case 'gainbound':
+          //Cookie必须
+          rule.cookie.required = true;
+          rule.cookie.verify = 'required';
           break;
-        //Cookie必须
         case 'hdcity':
+          //Cookie必须
           rule.cookie.required = true;
           rule.cookie.verify = 'required';
           rule.passkey.required = false;
@@ -243,7 +262,6 @@
           rule.cookie.verify = 'required';
           rule.passkey.required = false;
           rule.passkey.verify = '';
-          rule.limitRule = true;
           break;
         case 'ttg':
           rule.downHash.visible = true;
@@ -256,6 +274,15 @@
           rule.torrent_pass.visible = true;
           rule.authkey.visible = true;
           break;
+        case 'zhuque':
+          rule.id = true;
+          rule.cookie.visible = false;
+          rule.passkey.visible = false;
+          rule.torrent_key.visible = true;
+          rule.rss_key.visible = true;
+          rule.torrent_key.desc = 'Torrent Key：用户信息 -> 个人设置';
+          rule.rss_key.desc = 'RSS Key：用户信息 -> 个人设置';
+          break;
         case 'hdpost':
           rule.passkey.visible = false;
           rule.rsskey.visible = true;
@@ -263,6 +290,7 @@
           break;
         //默认规则
         default:
+          rule.urlJoin.visible = true;
           break;
       }
       laytpl(getTpl).render(rule, function(html) {

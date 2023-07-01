@@ -1,4 +1,5 @@
 <?php
+
 namespace app\domain\ConfigParser;
 
 use app\domain\ConfigParserInterface;
@@ -11,63 +12,58 @@ class Rss implements ConfigParserInterface
      * @param string $uuid
      * @return array
      */
-    public static function parser($uuid = ''):array
+    public static function parser(string $uuid = ''): array
     {
         $rs = [
-            'site'   => [],
-            'sites'   => [],
+            'site' => [],
+            'sites' => [],
             'clients' => [],
-            'filter'  => [],
+            'filter' => [],
         ];
         if (empty($uuid)) {
             return $rs;
         }
         $cron = Config::getCronByUUID($uuid);
-        //检查使能
-        if (isset($cron['switch']) && $cron['switch'] === 'on') {
-            //IYUU密钥
-            $iyuu = Config::getIyuu();
-            $rs['iyuu.cn'] = $iyuu['iyuu.cn'];
 
-            //默认
-            $default = Config::getDefault();
-            $rs['default'] = $default;
+        //IYUU密钥
+        $iyuu = Config::getIyuu();
+        $rs['iyuu.cn'] = $iyuu['iyuu.cn'];
 
-            //解析用户的站点配置
-            $site = 'site';
-            $userSites = Config::getUserSites();
-            if (!empty($cron[$site]) && !empty($userSites)) {
-                $key = $cron[$site];
-                $rs['site'] = array_key_exists($key, $userSites) ? $userSites[$key] : [];
-            }
+        //默认
+        $default = Config::getDefault();
+        $rs['default'] = $default;
 
-            //解析站点域名
-            $sites = Config::getSites();
-            if (!empty($cron[$site]) && !empty($sites)) {
-                $key = $cron[$site];
-                $rs['sites'] = array_key_exists($key, $sites) ? $sites[$key] : [];
-            }
-
-            //解析下载器
-            $clients = Config::getClients();
-            if (!empty($cron['clients']) && !empty($clients)) {
-                $key = $cron['clients'];
-                $rs['clients'] = array_key_exists($key, $clients) ? $clients[$key] : [];
-            }
-
-            //解析筛选规则的过滤器
-            $filter = Config::getFilter();
-            if (!empty($cron['filter']) && !empty($filter)) {
-                $key = $cron['filter'];
-                $rs['filter'] = array_key_exists($key, $filter) ? $filter[$key] : [];
-            }
-
-            //其他参数
-            $rs = array_merge($cron, $rs);
-        } else {
-            $rs = [];
+        //解析用户的站点配置
+        $site = 'site';
+        $userSites = Config::getUserSites();
+        if (!empty($cron[$site]) && !empty($userSites)) {
+            $key = $cron[$site];
+            $rs['site'] = array_key_exists($key, $userSites) ? $userSites[$key] : [];
         }
-        return $rs;
+
+        //解析站点域名
+        $sites = Config::getSites();
+        if (!empty($cron[$site]) && !empty($sites)) {
+            $key = $cron[$site];
+            $rs['sites'] = array_key_exists($key, $sites) ? $sites[$key] : [];
+        }
+
+        //解析下载器
+        $clients = Config::getClients();
+        if (!empty($cron['clients']) && !empty($clients)) {
+            $key = $cron['clients'];
+            $rs['clients'] = array_key_exists($key, $clients) ? $clients[$key] : [];
+        }
+
+        //解析筛选规则的过滤器
+        $filter = Config::getFilter();
+        if (!empty($cron['filter']) && !empty($filter)) {
+            $key = $cron['filter'];
+            $rs['filter'] = array_key_exists($key, $filter) ? $filter[$key] : [];
+        }
+
+        //其他参数
+        return array_merge($cron, $rs);
     }
 
     /**
@@ -75,7 +71,7 @@ class Rss implements ConfigParserInterface
      * @descr 步骤：1.获取Rss目录下的全部类文件名； 2.实例化类为对象； 3.获取对象的成员变量site
      * @return array
      */
-    public static function getAllRssClass():array
+    public static function getAllRssClass(): array
     {
         $data = [];
         //排除的类
@@ -86,7 +82,7 @@ class Rss implements ConfigParserInterface
             if (in_array($filename, $filter)) {
                 continue;
             }
-            $classname = "IYUU\\Rss\\".$filename;
+            $classname = "IYUU\\Rss\\" . $filename;
             if (class_exists($classname)) {
                 $obj = new $classname(false);
                 $data[] = $obj->site;
@@ -102,7 +98,7 @@ class Rss implements ConfigParserInterface
      * @param array $data
      * @return array
      */
-    public static function formatSites(array $data = []):array
+    public static function formatSites(array $data = []): array
     {
         $sites = Config::getSites();
         $sites = array_filter($sites, function ($k) use ($data) {

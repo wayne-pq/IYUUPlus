@@ -1,4 +1,5 @@
 <?php
+
 namespace app\domain;
 
 use app\common\Config as Conf;
@@ -18,26 +19,27 @@ class Config
         'clients' => 'clients',
         'crontab' => 'crontab',
         'default' => 'default',
-        'filter'  => 'filter',
-        'folder'  => 'folder',
-        'init'    => 'init',
-        'iyuu'    => 'iyuu',
-        'mail'    => 'mail',
-        'sites'   => 'sites',
-        'sms'     => 'sms',
-        'user'    => 'user',
-        'user_sites'=> 'user_sites',
-        'weixin'  => 'weixin',
+        'filter' => 'filter',
+        'folder' => 'folder',
+        'init' => 'init',
+        'iyuu' => 'iyuu',
+        'notify' => 'notify',
+        'mail' => 'mail',
+        'sites' => 'sites',
+        'sms' => 'sms',
+        'user' => 'user',
+        'user_sites' => 'user_sites',
+        'weixin' => 'weixin',
         'userProfile' => 'userProfile',
     ];
 
     /**
      * 主入口
-     * @param string $config_filename       配置文件名
-     * @param Request $request              请求对象
+     * @param string $config_filename 配置文件名
+     * @param Request $request 请求对象
      * @return array
      */
-    public static function main(string $config_filename, Request $request):array
+    public static function main(string $config_filename, Request $request): array
     {
         $rs = Constant::RS;
         // 取值优先级：get > post
@@ -54,6 +56,7 @@ class Config
                 case 'crontab':
                     return self::uuid($config_filename, $request);
                 case 'user_sites':
+                case 'notify':
                     return self::uuid($config_filename, $request, 'name');
                 default:
                     return self::default($config_filename, $request);
@@ -62,16 +65,45 @@ class Config
     }
 
     /**
+     * 把老的通知数据格式改成新的
+     * 删除 weixin.json 把发送条件合并到定时任务里
+     * 初始化 notify.json，添加默认的 iyuu 通道
+     */
+    private static function migration_notify(array $crontab_configs): array
+    {
+        self::patchNotify();
+        if (empty($crontab_configs)) return $crontab_configs;
+        if (isset(current($crontab_configs)['notify'])) return $crontab_configs;
+        $wx = self::getWeixin();
+        foreach ($crontab_configs as $uuid => $item) {
+            $crontab_configs[$uuid]['notify'] = [
+                'enable' => $wx['switch'] ?? 'on',
+                'channel' => 'iyuu',
+                'notify_on_change' => $wx['notify_on_change'] ?? 'off',
+            ];
+        }
+        return $crontab_configs;
+    }
+
+    /**
      * 用UUID模拟数据库主键实现配置的增删改查
-     * @param string $config_filename       配置文件名
-     * @param Request $request              请求对象
-     * @param null $PRIMARY                 主键
+     * @param string $config_filename 配置文件名
+     * @param Request $request 请求对象
+     * @param null $PRIMARY 主键
      * @return array
      */
-    public static function uuid(string $config_filename, Request $request, $PRIMARY = null):array
+    public static function uuid(string $config_filename, Request $request, $PRIMARY = null): array
     {
         $rs = Constant::RS;
         $old_config = Conf::get($config_filename, Constant::config_format, []);
+        if ($config_filename === 'crontab' && !empty($old_config)) {
+            $old_config = self::migration_notify($old_config);
+            Conf::set('crontab', $old_config, Constant::config_format);
+            env('APP_DEBUG', false) and Conf::set('crontab', $old_config, 'array');
+        }
+        if ($config_filename === 'notify' && empty($old_config)) {
+            $old_config = self::patchNotify();;
+        }
         // 取值优先级：get > post
         $action = $request->get(Constant::action) ? $request->get(Constant::action) : $request->post(Constant::action);
         switch ($action) {
@@ -128,20 +160,6 @@ class Config
     }
 
     /**
-     * 简单操作的增删改查
-     * @param string $config_filename
-     * @param Request $request
-     * @return array
-     */
-    public static function default(string $config_filename, Request $request):array
-    {
-        $data = $request->post();
-        self::createDataExcludeKeys($data);
-        Conf::set($config_filename, $data, Constant::config_format);
-        return Constant::RS;
-    }
-
-    /**
      * 排除字段
      * @param $data
      */
@@ -155,10 +173,24 @@ class Config
     }
 
     /**
+     * 简单操作的增删改查
+     * @param string $config_filename
+     * @param Request $request
+     * @return array
+     */
+    public static function default(string $config_filename, Request $request): array
+    {
+        $data = $request->post();
+        self::createDataExcludeKeys($data);
+        Conf::set($config_filename, $data, Constant::config_format);
+        return Constant::RS;
+    }
+
+    /**
      * IYUU密钥
      * @return array
      */
-    public static function getIyuu():array
+    public static function getIyuu(): array
     {
         return Conf::get(self::filename['iyuu'], Constant::config_format, []);
     }
@@ -167,7 +199,7 @@ class Config
      * 默认配置
      * @return array
      */
-    public static function getDefault():array
+    public static function getDefault(): array
     {
         return Conf::get(self::filename['default'], Constant::config_format, []);
     }
@@ -176,43 +208,25 @@ class Config
      * 客户端
      * @return array
      */
-    public static function getClients():array
+    public static function getClients(): array
     {
         return Conf::get(self::filename['clients'], Constant::config_format, []);
-    }
-
-    /**
-     * 计划任务
-     * @return array
-     */
-    public static function getCrontab():array
-    {
-        return Conf::get(self::filename['crontab'], Constant::config_format, []);
     }
 
     /**
      * 目录
      * @return array
      */
-    public static function getFolder():array
+    public static function getFolder(): array
     {
         return Conf::get(self::filename['folder'], Constant::config_format, []);
-    }
-
-    /**
-     * 用户拥有的站点
-     * @return array
-     */
-    public static function getUserSites():array
-    {
-        return Conf::get(self::filename['user_sites'], Constant::config_format, []);
     }
 
     /**
      * 所有站点
      * @return array
      */
-    public static function getSites():array
+    public static function getSites(): array
     {
         return Conf::get(self::filename['sites'], Constant::config_format, []);
     }
@@ -221,7 +235,7 @@ class Config
      * 过滤器
      * @return array
      */
-    public static function getFilter():array
+    public static function getFilter(): array
     {
         return Conf::get(self::filename['filter'], Constant::config_format, []);
     }
@@ -230,9 +244,47 @@ class Config
      * 微信配置
      * @return array
      */
-    public static function getWeixin():array
+    public static function getWeixin(): array
     {
         return Conf::get(self::filename['weixin'], Constant::config_format, []);
+    }
+
+    /**
+     * 通知配置
+     * @return object[]
+     */
+    public static function getNotify(): array
+    {
+        $config = Conf::get(self::filename['notify'], Constant::config_format, []);
+        if (empty($config)) {
+            $iyuu_config = self::getIyuu();
+            if (!empty($iyuu_config)) {
+                return self::patchNotify();
+            }
+        }
+        return $config;
+    }
+
+    /**
+     * patch 通知配置
+     * @return array
+     */
+    private static function patchNotify(): array
+    {
+        $old = Conf::get(self::filename['notify'], Constant::config_format, []);
+        if (!empty($old)) return $old;
+        $iyuu_config = self::getIyuu();
+        $config = [
+            'iyuu' => [
+                'uuid' => 'iyuu',
+                'name' => 'iyuu',
+                'type' => 'iyuu',
+                'options' => ['token' => $iyuu_config['iyuu.cn']],
+            ],
+        ];
+        Conf::set(self::filename['notify'], $config, Constant::config_format);
+        env('APP_DEBUG', false) and Conf::set(self::filename['notify'], $config, 'array');
+        return $config;
     }
 
     /**
@@ -240,10 +292,19 @@ class Config
      * @param string $uuid
      * @return array
      */
-    public static function getCronByUUID(string $uuid = ''):array
+    public static function getCronByUUID(string $uuid = ''): array
     {
         $cron = self::getCrontab();
         return array_key_exists($uuid, $cron) ? $cron[$uuid] : [];
+    }
+
+    /**
+     * 计划任务
+     * @return array
+     */
+    public static function getCrontab(): array
+    {
+        return Conf::get(self::filename['crontab'], Constant::config_format, []);
     }
 
     /**
@@ -251,7 +312,7 @@ class Config
      * @param array $sites
      * @return array
      */
-    public static function disabledUserSites(array &$sites):array
+    public static function disabledUserSites(array &$sites): array
     {
         $user_sites = self::getUserSites();
         array_walk($sites, function (&$v, $k) use ($user_sites) {
@@ -263,11 +324,20 @@ class Config
     }
 
     /**
+     * 用户拥有的站点
+     * @return array
+     */
+    public static function getUserSites(): array
+    {
+        return Conf::get(self::filename['user_sites'], Constant::config_format, []);
+    }
+
+    /**
      * 禁用用户未配置的站点
      * @param array $sites
      * @return array
      */
-    public static function disabledNotConfiguredUserSites(array &$sites):array
+    public static function disabledNotConfiguredUserSites(array &$sites): array
     {
         $user_sites = self::getUserSites();
         array_walk($sites, function (&$v, $k) use ($user_sites) {

@@ -13,11 +13,13 @@
  */
 namespace Workerman\Protocols\Http\Session;
 
+use Workerman\Protocols\Http\Session;
+
 /**
  * Class FileSessionHandler
  * @package Workerman\Protocols\Http\Session
  */
-class FileSessionHandler implements \SessionHandlerInterface
+class FileSessionHandler implements SessionHandlerInterface
 {
     /**
      * Session save path.
@@ -70,6 +72,10 @@ class FileSessionHandler implements \SessionHandlerInterface
         $session_file = static::sessionFile($session_id);
         \clearstatcache();
         if (\is_file($session_file)) {
+            if (\time() - \filemtime($session_file) > Session::$lifetime) {
+                \unlink($session_file);
+                return '';
+            }
             $data = \file_get_contents($session_file);
             return $data ? $data : '';
         }
@@ -81,11 +87,35 @@ class FileSessionHandler implements \SessionHandlerInterface
      */
     public function write($session_id, $session_data)
     {
-        $temp_file = static::$_sessionSavePath.uniqid(mt_rand(), true);
+        $temp_file = static::$_sessionSavePath . uniqid(bin2hex(random_bytes(8)), true);
         if (!\file_put_contents($temp_file, $session_data)) {
             return false;
         }
         return \rename($temp_file, static::sessionFile($session_id));
+    }
+
+    /**
+     * Update sesstion modify time.
+     * 
+     * @see https://www.php.net/manual/en/class.sessionupdatetimestamphandlerinterface.php
+     * @see https://www.php.net/manual/zh/function.touch.php
+     * 
+     * @param string $id Session id.
+     * @param string $data Session Data.
+     * 
+     * @return bool
+     */
+    public function updateTimestamp($id, $data = "")
+    {
+        $session_file = static::sessionFile($id);
+        if (!file_exists($session_file)) {
+            return false;
+        }
+        // set file modify time to current time
+        $set_modify_time = \touch($session_file);
+        // clear file stat cache
+        \clearstatcache();
+        return $set_modify_time;
     }
 
     /**
@@ -123,7 +153,7 @@ class FileSessionHandler implements \SessionHandlerInterface
     /**
      * Get session file path.
      *
-     * @param $session_id
+     * @param string $session_id
      * @return string
      */
     protected static function sessionFile($session_id) {
@@ -133,7 +163,7 @@ class FileSessionHandler implements \SessionHandlerInterface
     /**
      * Get or set session file path.
      *
-     * @param $path
+     * @param string $path
      * @return string
      */
     public static function sessionSavePath($path) {

@@ -1,4 +1,5 @@
 <?php
+
 namespace IYUU\Reseed;
 
 use Curl\Curl;
@@ -8,33 +9,36 @@ use Curl\Curl;
  */
 class Oauth
 {
-    private static $conf = [];
-    // 登录缓存路径
+    /**
+     * 登录缓存路径
+     */
     const SiteLoginCache = RUNTIME_PATH . DS . 'db' . DS . 'siteLoginCache_{}.json';
+
+    /**
+     * 配置
+     * @var array
+     */
+    private static $conf = [];
+
+    /**
+     * 用户验证字段映射表
+     */
+    const VERITY_FIELD_MAP = [
+        //默认字段名字
+        '' => 'passkey',
+        //朱雀
+        'zhuque' => 'torrent_key'
+    ];
 
     /**
      * 初始化
      * @param array $config
      */
-    public static function init($config = [])
+    public static function init(array $config = [])
     {
         $dir = dirname(self::SiteLoginCache);
         is_dir($dir) or mkdir($dir, 0777, true);
         self::$conf = $config;
-    }
-
-    /**
-     * 从配置文件内读取爱语飞飞token作为鉴权参数
-     */
-    public static function getSign()
-    {
-        $token = empty(self::$conf['iyuu.cn'])  ? '' : self::$conf['iyuu.cn'];
-        if (empty($token) || strlen($token) < 46) {
-            echo "缺少辅种接口请求参数：爱语飞飞token ".PHP_EOL;
-            echo "请访问https://iyuu.cn 用微信扫码申请。".PHP_EOL.PHP_EOL;
-            exit(1);
-        }
-        return $token;
     }
 
     /**
@@ -45,7 +49,7 @@ class Oauth
      * @param array $sites
      * @return bool
      */
-    public static function login($apiUrl = '', $sites = array())
+    public static function login(string $apiUrl = '', array $sites = array()): bool
     {
         // 云端下发合作的站点标识
         if (empty($sites)) {
@@ -60,17 +64,19 @@ class Oauth
                 $ret = true;
                 continue;
             }
-            if (isset(self::$conf['sites'][$site]['passkey']) && self::$conf['sites'][$site]['passkey'] && isset(self::$conf['sites'][$site]['id']) && self::$conf['sites'][$site]['id']) {
+            //取推荐站点验证字段名字
+            $filed = static::VERITY_FIELD_MAP[$site] ?? static::VERITY_FIELD_MAP[''];
+            if (isset(self::$conf['sites'][$site][$filed]) && self::$conf['sites'][$site][$filed] && isset(self::$conf['sites'][$site]['id']) && self::$conf['sites'][$site]['id']) {
                 $user_id = self::$conf['sites'][$site]['id'];
-                $passkey =  self::$conf['sites'][$site]['passkey'];
+                $passkey = self::$conf['sites'][$site][$filed];
 
                 $curl = new Curl();
                 $curl->setOpt(CURLOPT_SSL_VERIFYPEER, false);
                 $data = [
-                    'token'  => $token,
-                    'id'     => $user_id,
-                    'passkey'=> sha1($passkey),     // 避免泄露用户passkey秘钥
-                    'site'   => $site,
+                    'token' => $token,
+                    'id' => $user_id,
+                    'passkey' => sha1($passkey),     // 避免泄露用户passkey秘钥
+                    'site' => $site,
                 ];
                 $res = $curl->get($apiUrl, $data);
                 cli($res->response);
@@ -85,11 +91,26 @@ class Oauth
                     echo $msg . PHP_EOL;
                 }
             } else {
-                echo $site.'合作站点参数配置不完整，请同时填写passkey和用户id。' . PHP_EOL;
-                echo '合作站点鉴权配置，请查阅：https://www.iyuu.cn/archives/337/'. PHP_EOL. PHP_EOL;
+                echo $site . '合作站点参数配置不完整，请同时填写passkey和用户id。' . PHP_EOL;
+                echo '合作站点鉴权配置，请查阅：https://www.iyuu.cn/archives/337/' . PHP_EOL . PHP_EOL;
             }
         }
         return $ret;
+    }
+
+    /**
+     * 从配置文件内读取爱语飞飞token作为鉴权参数
+     * @return string
+     */
+    public static function getSign(): string
+    {
+        $token = empty(self::$conf['iyuu.cn']) ? '' : self::$conf['iyuu.cn'];
+        if (empty($token) || strlen($token) < 46) {
+            echo "缺少辅种接口请求参数：爱语飞飞token " . PHP_EOL;
+            echo "请访问https://iyuu.cn 用微信扫码申请。" . PHP_EOL . PHP_EOL;
+            exit(1);
+        }
+        return $token;
     }
 
     /**
@@ -97,15 +118,14 @@ class Oauth
      * @desc 作用：减少对服务器请求，跳过鉴权提示信息；
      * @param string $site
      * @param array $array
-     * @return bool|int
+     * @return void
      */
-    private static function setSiteLoginCache($site = '', $array = [])
+    private static function setSiteLoginCache(string $site, array $array): void
     {
         $json = json_encode($array, JSON_UNESCAPED_UNICODE);
         $file = str_replace('{}', $site, self::SiteLoginCache);
         $file_pointer = @fopen($file, "w");
         $worldsnum = @fwrite($file_pointer, $json);
         @fclose($file_pointer);
-        return $worldsnum;
     }
 }

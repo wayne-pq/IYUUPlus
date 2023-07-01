@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+
 namespace app\common\event;
 
 use Throwable;
@@ -8,56 +9,61 @@ use Throwable;
  * 事件调度器
  * Class EventDispatcher
  */
-class EventDispatcher implements ListenerProviderInterface, EventDispatcherInterface
+class EventDispatcher
 {
     /**
+     * @var EventDispatcher
+     */
+    private static $instance = null;
+
+    /**
+     * 所有事件监听器
      * @var EventListenerInterface
      */
     protected $eventListeners = [];
 
     /**
-     * EventDispatcher constructor.
-     * @param EventListenerInterface ...$listeners
+     * 构造函数
+     * @descr 初始化所有事件监听器
+     * @param EventListenerInterface[]|string[] $listeners
      */
-    public function __construct($listeners)
+    public function __construct(array $listeners)
     {
         $eventListeners = [];
         foreach ($listeners as $listener) {
-            foreach ($listener->events() as $event) {
-                $eventListeners[$event][] = $listener;
+            //传入类名，实例化
+            if (is_string($listener)) {
+                $listener = new $listener;
+            }
+            if ($listener instanceof EventListenerInterface) {
+                foreach ($listener->events() as $event) {
+                    $eventListeners[$event][] = $listener;
+                }
             }
         }
         $this->eventListeners = $eventListeners;
     }
 
     /**
-     * 检出当前事件的所有监听器
-     *
-     * @param object $event
-     *   An event for which to return the relevant listeners.
-     * @return iterable[callable]
-     *   An iterable (array, iterator, or generator) of callables.  Each
-     *   callable MUST be type-compatible with $event.
+     * 单例调用
+     * @param EventListenerInterface[] $listeners
+     * @return EventDispatcher
      */
-    public function getListenersForEvent(object $event): iterable
+    final public static function getInstance(array $listeners = []): EventDispatcher
     {
-        $class     = get_class($event);
-        $listeners = $this->eventListeners[$class] ?? [];
-        $iterable  = [];
-        foreach ($listeners as $listener) {
-            $iterable[] = [$listener, 'process'];
+        if (null === static::$instance) {
+            static::$instance = new static($listeners);
         }
-        return $iterable;
+
+        return static::$instance;
     }
 
     /**
-     * 派发当前事件到所有监听器的process处理方法
-     *
-     * @param object $event     当前事件对象
-     * @return string
-     *   The Event that was passed, now modified by listeners.
+     * 派发当前事件到所有监听器的处理方法process
+     * @param object $event 当前事件对象
+     * @return object
      */
-    public function dispatch(object $event)
+    public function dispatch(object $event): object
     {
         foreach ($this->getListenersForEvent($event) as $callback) {
             try {
@@ -70,5 +76,21 @@ class EventDispatcher implements ListenerProviderInterface, EventDispatcherInter
             }
         }
         return $event;
+    }
+
+    /**
+     * 检出当前事件的所有监听器
+     * @param object $event 当前事件类
+     * @return iterable 可迭代对象
+     */
+    public function getListenersForEvent(object $event): iterable
+    {
+        $class = get_class($event);
+        $listeners = $this->eventListeners[$class] ?? [];
+        $iterable = [];
+        foreach ($listeners as $listener) {
+            $iterable[] = [$listener, 'process'];
+        }
+        return $iterable;
     }
 }

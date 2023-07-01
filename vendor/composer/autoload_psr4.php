@@ -6,12 +6,25 @@ $vendorDir = dirname(dirname(__FILE__));
 $baseDir = dirname($vendorDir);
 
 return array(
+    'support\\' => array($vendorDir . '/workerman/webman-framework/src/support'),
     'Workerman\\Crontab\\' => array($vendorDir . '/workerman/crontab/src'),
     'Workerman\\' => array($vendorDir . '/workerman/workerman'),
+    'Webman\\Event\\' => array($vendorDir . '/webman/event/src'),
+    'Webman\\Console\\' => array($vendorDir . '/webman/console/src'),
     'Webman\\' => array($vendorDir . '/workerman/webman-framework/src'),
     'Symfony\\Polyfill\\Php80\\' => array($vendorDir . '/symfony/polyfill-php80'),
+    'Symfony\\Polyfill\\Php73\\' => array($vendorDir . '/symfony/polyfill-php73'),
     'Symfony\\Polyfill\\Mbstring\\' => array($vendorDir . '/symfony/polyfill-mbstring'),
+    'Symfony\\Polyfill\\Intl\\Normalizer\\' => array($vendorDir . '/symfony/polyfill-intl-normalizer'),
+    'Symfony\\Polyfill\\Intl\\Grapheme\\' => array($vendorDir . '/symfony/polyfill-intl-grapheme'),
     'Symfony\\Polyfill\\Ctype\\' => array($vendorDir . '/symfony/polyfill-ctype'),
+    'Symfony\\Contracts\\Service\\' => array($vendorDir . '/symfony/service-contracts'),
+    'Symfony\\Component\\String\\' => array($vendorDir . '/symfony/string'),
+    'Symfony\\Component\\Console\\' => array($vendorDir . '/symfony/console'),
+    'Support\\View\\' => array($vendorDir . '/workerman/webman-framework/src/support/view'),
+    'Support\\Exception\\' => array($vendorDir . '/workerman/webman-framework/src/support/exception'),
+    'Support\\Bootstrap\\' => array($vendorDir . '/workerman/webman-framework/src/support/bootstrap'),
+    'Support\\' => array($vendorDir . '/workerman/webman-framework/src/support'),
     'Rhilip\\Bencode\\' => array($vendorDir . '/rhilip/bencode/src'),
     'Psr\\Log\\' => array($vendorDir . '/psr/log/Psr/Log'),
     'Psr\\Container\\' => array($vendorDir . '/psr/container/src'),
@@ -22,4 +35,6 @@ return array(
     'GrahamCampbell\\ResultType\\' => array($vendorDir . '/graham-campbell/result-type/src'),
     'FastRoute\\' => array($vendorDir . '/nikic/fast-route/src'),
     'Dotenv\\' => array($vendorDir . '/vlucas/phpdotenv/src'),
+    'Doctrine\\Inflector\\' => array($vendorDir . '/doctrine/inflector/lib/Doctrine/Inflector'),
+    '' => array($baseDir . '/'),
 );

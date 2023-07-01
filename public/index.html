@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>IYUUAutoReseed PLUS</title>
+  <title>IYUU PLUS</title>
   <meta name="keywords" content="layuimini,layui,layui模板,layui后台,后台模板,admin,admin模板,layui mini">
   <meta name="description" content="layuimini基于layui的轻量级前端后台管理框架，最简洁、易用的后台框架模板，面向所有层次的前后端程序,只需提供一个接口就直接初始化整个框架，无需复杂操作。">
   <meta name="renderer" content="webkit">
@@ -130,18 +130,28 @@
         miniAdmin = layui.miniAdmin,
         miniTongji = layui.miniTongji;
 
+  /**
+   * 登录检测
+   */
+    function check_login() {
+        $.ajax({
+            url: '/Api/checkLogin',
+            type:'get',
+            success:function(data){
+                if (data.ret !== 200 || data.data.is_login !== true) {
+                    layer.msg('您暂未登录，正在前往登录入口……', function () {
+                        window.location = '/page/login.html';
+                    });
+                }
+            }
+        });
+    }
+
     //登录检测
-    $.ajax({
-      url: '/Api/checkLogin',
-      type:'get',
-      success:function(data){
-        if (data.ret !== 200 || data.data.is_login !== true) {
-          layer.msg('您暂未登录，正在前往登录入口……', function () {
-            window.location = '/page/login.html';
-          });
-        }
-      }
-    });
+    check_login();
+    setInterval(function () {
+        check_login();
+    }, 30000);
 
     let options = {
         iniUrl: "/Api/Menu",    // 初始化接口

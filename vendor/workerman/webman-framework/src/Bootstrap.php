@@ -11,6 +11,7 @@
  * @link      http://www.workerman.net/
  * @license   http://www.opensource.org/licenses/mit-license.php MIT License
  */
+
 namespace Webman;
 
 use Workerman\Worker;
@@ -20,7 +21,7 @@ interface Bootstrap
     /**
      * onWorkerStart
      *
-     * @param $worker Worker
+     * @param Worker $worker
      * @return mixed
      */
     public static function start($worker);

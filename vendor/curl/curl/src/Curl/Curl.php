@@ -66,7 +66,7 @@ class Curl
     /**
      * @var string The user agent name which is set when making a request
      */
-    const USER_AGENT = 'PHP Curl/1.9 (+https://github.com/php-mod/curl)';
+    const USER_AGENT = 'PHP Curl/2.3 (+https://github.com/php-mod/curl)';
 
     private $_cookies = array();
 
@@ -206,7 +206,7 @@ class Curl
      *
      * @return int Returns the error code for the current curl request
      */
-    protected function exec()
+    public function exec()
     {
         $this->response_headers = array();
         $this->response = curl_exec($this->curl);
@@ -217,7 +217,7 @@ class Curl
         $this->http_error = $this->isError();
         $this->error = $this->curl_error || $this->http_error;
         $this->error_code = $this->error ? ($this->curl_error ? $this->getErrorCode() : $this->getHttpStatus()) : 0;
-        $this->request_headers = preg_split('/\r\n/', curl_getinfo($this->curl, CURLINFO_HEADER_OUT), null, PREG_SPLIT_NO_EMPTY);
+        $this->request_headers = preg_split('/\r\n/', curl_getinfo($this->curl, CURLINFO_HEADER_OUT), -1, PREG_SPLIT_NO_EMPTY);
         $this->http_error_message = $this->error ? (isset($this->response_headers['0']) ? $this->response_headers['0'] : '') : '';
         $this->error_message = $this->curl_error ? $this->getErrorMessage() : $this->http_error_message;
 
@@ -284,7 +284,7 @@ class Curl
     // public methods
 
     /**
-     * @deprecated calling exec() directly is discouraged
+     * @deprecated use `exec()` directly.
      */
     public function _exec()
     {
@@ -304,6 +304,7 @@ class Curl
      */
     public function get($url, $data = array())
     {
+        $this->setOpt(CURLOPT_CUSTOMREQUEST, "GET");
         if (count($data) > 0) {
             $this->setOpt(CURLOPT_URL, $url.'?'.http_build_query($data));
         } else {
@@ -315,15 +316,38 @@ class Curl
     }
 
     /**
+     * Purge Request
+     *
+     * A very common scenario to send a purge request is within the use of varnish, therefore 
+     * the optional hostname can be defined.
+     * 
+     * @param strng $url The url to make the purge request
+     * @param string $hostname An optional hostname which will be sent as http host header
+     * @return self
+     * @since 2.4.0
+     */
+    public function purge($url, $hostName = null)
+    {
+        $this->setOpt(CURLOPT_URL, $url);
+        $this->setOpt(CURLOPT_CUSTOMREQUEST, 'PURGE'); 
+        if ($hostName) {
+            $this->setHeader('Host', $hostName);
+        }
+        $this->exec();
+        return $this;
+    }
+    
+    /**
      * Make a post request with optional post data.
      *
      * @param string $url  The url to make the post request
-     * @param array  $data Post data to pass to the url
+     * @param array|object|string $data Post data to pass to the url
      * @param boolean $asJson Whether the data should be passed as json or not. {@insce 2.2.1}
      * @return self
      */
     public function post($url, $data = array(), $asJson = false)
     {
+        $this->setOpt(CURLOPT_CUSTOMREQUEST, "POST");
         $this->setOpt(CURLOPT_URL, $url);
         if ($asJson) {
             $this->prepareJsonPayload($data);
@@ -342,15 +366,20 @@ class Curl
      * @param string $url The url to make the put request
      * @param array $data Optional data to pass to the $url
      * @param bool $payload Whether the data should be transmitted trough payload or as get parameters of the string
+     * @param boolean $asJson Whether the data should be passed as json or not. {@insce 2.4.0}
      * @return self
      */
-    public function put($url, $data = array(), $payload = false)
+    public function put($url, $data = array(), $payload = false, $asJson = false)
     {
         if (! empty($data)) {
             if ($payload === false) {
                 $url .= '?'.http_build_query($data);
             } else {
-                $this->preparePayload($data);
+                if ($asJson) {
+                    $this->prepareJsonPayload($data);
+                } else {
+                    $this->preparePayload($data);
+                }
             }
         }
 
@@ -368,15 +397,20 @@ class Curl
      * @param string $url The url to make the patch request
      * @param array $data Optional data to pass to the $url
      * @param bool $payload Whether the data should be transmitted trough payload or as get parameters of the string
+     * @param boolean $asJson Whether the data should be passed as json or not. {@insce 2.4.0}
      * @return self
      */
-    public function patch($url, $data = array(), $payload = false)
+    public function patch($url, $data = array(), $payload = false, $asJson = false)
     {
         if (! empty($data)) {
             if ($payload === false) {
                 $url .= '?'.http_build_query($data);
             } else {
-                $this->preparePayload($data);
+                if ($asJson) {
+                    $this->prepareJsonPayload($data);
+                } else {
+                    $this->preparePayload($data);
+                }
             }
         }
 
@@ -710,13 +744,15 @@ class Curl
     public function getResponseHeaders($headerKey = null)
     {
         $headers = array();
-        $headerKey = strtolower($headerKey);
-        
+        if (!is_null($headerKey)) {
+            $headerKey = strtolower($headerKey);
+        }
+
         foreach ($this->response_headers as $header) {
             $parts = explode(":", $header, 2);
             
-            $key = isset($parts[0]) ? $parts[0] : null;
-            $value = isset($parts[1]) ? $parts[1] : null;
+            $key = isset($parts[0]) ? $parts[0] : '';
+            $value = isset($parts[1]) ? $parts[1] : '';
             
             $headers[trim(strtolower($key))] = trim($value);
         }

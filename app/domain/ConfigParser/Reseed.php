@@ -1,4 +1,5 @@
 <?php
+
 namespace app\domain\ConfigParser;
 
 use app\domain\ConfigParserInterface;
@@ -18,88 +19,84 @@ class Reseed implements ConfigParserInterface
      * @param string $uuid
      * @return array
      */
-    public static function parser($uuid = ''):array
+    public static function parser(string $uuid = ''): array
     {
         $rs = [
-            'sites'   => [],
+            'sites' => [],
             'clients' => [],
         ];
         if (empty($uuid)) {
             return $rs;
         }
         $cron = Config::getCronByUUID($uuid);
-        //检查使能
-        if (isset($cron['switch']) && $cron['switch'] === 'on') {
-            //IYUU密钥
-            $iyuu = Config::getIyuu();
-            $rs['iyuu.cn'] = $iyuu['iyuu.cn'];
 
-            //默认
-            $rs['default'] = Config::getDefault();
+        //IYUU密钥
+        $iyuu = Config::getIyuu();
+        $rs['iyuu.cn'] = $iyuu['iyuu.cn'];
 
-            //微信通知
-            $rs['weixin'] = Config::getWeixin();
+        //默认
+        $rs['default'] = Config::getDefault();
 
-            //解析站点
-            $sites = Config::getUserSites();
-            if (!empty($cron['sites']) && !empty($sites)) {
-                $key = $cron['sites'];
-                $rs['sites'] = array_filter($sites, function ($v, $k) use ($key) {
-                    return array_key_exists($k, $key);
-                }, ARRAY_FILTER_USE_BOTH);
-            }
+        //微信通知
+        $rs['weixin'] = Config::getWeixin();
 
-            //解析下载器
-            $clients = Config::getClients();
-            if (!empty($cron['clients']) && !empty($clients)) {
-                $key = $cron['clients'];
-                $rs['clients'] = array_filter($clients, function ($k) use ($key) {
-                    return array_key_exists($k, $key);
-                }, ARRAY_FILTER_USE_KEY);
-            }
-
-            //其他参数
-            $rs = array_merge($cron, $rs);
+        //解析站点
+        $sites = Config::getUserSites();
+        if (!empty($cron['sites']) && !empty($sites)) {
+            $key = $cron['sites'];
+            $rs['sites'] = array_filter($sites, function ($v, $k) use ($key) {
+                return array_key_exists($k, $key);
+            }, ARRAY_FILTER_USE_BOTH);
         }
 
-        return $rs;
-    }
+        //解析下载器
+        $clients = Config::getClients();
+        if (!empty($cron['clients']) && !empty($clients)) {
+            $key = $cron['clients'];
+            $rs['clients'] = array_filter($clients, function ($k) use ($key) {
+                return array_key_exists($k, $key);
+            }, ARRAY_FILTER_USE_KEY);
+        }
 
-    /**
-     * 获取辅种缓存的存放路径
-     * @return string
-     */
-    public static function getReseedCachePath():string
-    {
-        return runtime_path() . DIRECTORY_SEPARATOR . 'torrent' . DIRECTORY_SEPARATOR . 'cachehash';
-    }
-
-    /**
-     * 获取转移缓存的存放路径
-     * @return string
-     */
-    public static function getMoveCachePath():string
-    {
-        return runtime_path() . DIRECTORY_SEPARATOR . 'torrent' . DIRECTORY_SEPARATOR . 'cachemove';
+        //其他参数
+        return array_merge($cron, $rs);
     }
 
     /**
      * 清理辅种缓存
      * @return bool
      */
-    public static function clearReseedCache():bool
+    public static function clearReseedCache(): bool
     {
         $dir = self::getReseedCachePath();
-        return is_dir($dir) ? IFile::rmdir($dir, true) : true;
+        return !is_dir($dir) || IFile::rmdir($dir, true);
+    }
+
+    /**
+     * 获取辅种缓存的存放路径
+     * @return string
+     */
+    public static function getReseedCachePath(): string
+    {
+        return runtime_path() . DIRECTORY_SEPARATOR . 'torrent' . DIRECTORY_SEPARATOR . 'cachehash';
     }
 
     /**
      * 清理转移缓存
      * @return bool
      */
-    public static function clearMoveCache():bool
+    public static function clearMoveCache(): bool
     {
         $dir = self::getMoveCachePath();
-        return is_dir($dir) ? IFile::rmdir($dir, true) : true;
+        return !is_dir($dir) || IFile::rmdir($dir, true);
+    }
+
+    /**
+     * 获取转移缓存的存放路径
+     * @return string
+     */
+    public static function getMoveCachePath(): string
+    {
+        return runtime_path() . DIRECTORY_SEPARATOR . 'torrent' . DIRECTORY_SEPARATOR . 'cachemove';
     }
 }
