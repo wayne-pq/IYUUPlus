@@ -52,14 +52,14 @@ goto :checkPHP
 
 :pull
 echo "正在检测源码库的git特征文件..."
-if exist "%~dp0.git\config" (
-    echo "正在为您自动更新..."
-    git fetch --all
-    git reset --hard origin/master
-    echo "更新完成！"
-) else (
-    echo "当前IYUUPlus源码，并非通过git拉取，不支持自动更新"
-)
+#if exist "%~dp0.git\config" (
+#    echo "正在为您自动更新..."
+#    git fetch --all
+#    git reset --hard origin/master
+#    echo "更新完成！"
+#) else (
+#    echo "当前IYUUPlus源码，并非通过git拉取，不支持自动更新"
+#)
 echo.
 goto :checkPHP
 

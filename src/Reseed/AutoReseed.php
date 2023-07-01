@@ -54,6 +54,11 @@ class AutoReseed
      * @var array
      */
     private static $noReseed = [];
+	/**
+     * 不辅种的种子hash
+     * @var array
+     */
+    private static $blank_reseed_hash_arr = [];
     /**
      * 运行缓存目录
      * @var string
@@ -146,6 +151,8 @@ class AutoReseed
         IFile::mkdir(self::$cacheNotify);
         // 8. 连接下载服务器
         self::links();
+		// 9. 初始化不辅种的种子hash列表
+        self::initBlankReseedHashArr();
     }
 
     /**
@@ -244,7 +251,14 @@ class AutoReseed
         }
         Oauth::login(Constant::API_BASE.Constant::API['login'], $recommend_sites);
     }
-
+    /**
+     * 初始化不辅种的种子hash
+     */
+    private static function initBlankReseedHashArr()
+    {
+        self::$blank_reseed_hash_arr = explode(',', env('BLANK_RESEED_HASH', ''));
+        echo '初始化不辅种的种子hash' .self::$blank_reseed_hash_arr;
+    }
     /**
      * 获取支持的辅种站点
      */
@@ -853,6 +867,12 @@ class AutoReseed
                     return false;
                 }
             }
+        }
+        // 不辅种的种子hash检测
+        if (in_array($info_hash,self::$blank_reseed_hash_arr)) {
+            echo '-------当前种子hash过滤' .$info_hash. '，已跳过！ '.PHP_EOL.PHP_EOL;
+            self::$wechatMsg['reseedRepeat']++;
+            return false;
         }
         // 重复做种检测
         if (isset($infohash_Dir[$info_hash])) {
