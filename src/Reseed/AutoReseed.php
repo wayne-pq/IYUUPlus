@@ -155,6 +155,11 @@ class AutoReseed
      * @var array
      */
     private static $noReseed = [];
+    /**
+     * 不辅种的种子hash
+     * @var array
+     */
+    private static $blank_reseed_hash_arr = [];
 
     /**
      * 初始化
@@ -285,7 +290,7 @@ class AutoReseed
     /**
      * 初始化不辅种的种子hash
      */
-    private static function initBlankReseedHashArr()
+    protected static function initBlankReseedHashArr()
     {
         self::$blank_reseed_hash_arr = explode(',', env('BLANK_RESEED_HASH', ''));
         echo '初始化不辅种的种子hash' .self::$blank_reseed_hash_arr;
@@ -850,7 +855,7 @@ class AutoReseed
         // 不辅种的种子hash检测
         if (in_array($info_hash,self::$blank_reseed_hash_arr)) {
             echo '-------当前种子hash过滤' .$info_hash. '，已跳过！ '.PHP_EOL.PHP_EOL;
-            self::$wechatMsg['reseedRepeat']++;
+            self::$notifyMsg['reseedRepeat']++;
             return false;
         }
         // 重复做种检测
